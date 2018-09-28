@@ -11,7 +11,7 @@ fn main() {
     }
 }
 
-fn tree(root: PathBuf) {
+pub fn tree(root: PathBuf) {
     let pathy = MyFuckingPath::new(root).unwrap();
     MyFuckingPrinter::new().rustree(pathy).unwrap();
 }
@@ -39,6 +39,7 @@ impl Bar {
 struct MyFuckingPrinter {
     bar: Vec<bool>,
     is_last: bool,
+    show_dot_files: bool,
 }
 
 impl MyFuckingPrinter {
@@ -46,7 +47,20 @@ impl MyFuckingPrinter {
         MyFuckingPrinter {
             bar: vec![],
             is_last: false,
+            show_dot_files: false,
         }
+    }
+
+    fn get_children(&self, path: MyFuckingPath) -> io::Result<Vec<MyFuckingPath>> {
+        let filter_children = |path: &MyFuckingPath| -> bool {
+            self.show_dot_files || !path.is_dot_file()
+        };
+        let mut children: Vec<MyFuckingPath> = path
+            .children()?
+            .filter(|r_path| r_path.as_ref().map(filter_children).unwrap_or(true))
+            .collect::<io::Result<_>>()?;
+        children.sort();
+        Ok(children)
     }
 
     fn rustree(&mut self, path: MyFuckingPath) -> io::Result<()> {
@@ -55,8 +69,7 @@ impl MyFuckingPrinter {
 
         if let Folder = path.file_type {
             self.bar.push(true);
-            let mut children: Vec<MyFuckingPath> = path.children()?.collect::<io::Result<_>>()?;
-            children.sort();
+            let mut children = self.get_children(path)?;
             let num_children = children.len();
             for (i, child) in children.drain(..).enumerate() {
                 self.is_last = i + 1 == num_children;
@@ -128,6 +141,13 @@ impl MyFuckingPath {
             path: path,
             file_type: file_type,
         })
+    }
+
+    fn is_dot_file(&self) -> bool {
+        self.path
+            .file_name()
+            .map(|name| name.to_string_lossy().starts_with("."))
+            .unwrap_or(false)
     }
 
     fn printable_name(&self) -> Cow<str> {
