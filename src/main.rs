@@ -2,6 +2,7 @@ use std::env;
 use std::fs::{self, Metadata};
 use std::io::{self, Error, ErrorKind};
 use std::path::PathBuf;
+use std::borrow::Cow;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -12,13 +13,84 @@ fn main() {
 
 fn tree(root: PathBuf) {
     let pathy = MyFuckingPath::new(root).unwrap();
-    pathy.rprint().unwrap();
+    MyFuckingPrinter::new().rustree(pathy).unwrap();
+}
+
+#[derive(Clone)]
+enum Bar {
+    I,
+    T,
+    L,
+    X,
+}
+
+impl Bar {
+    fn str(&self) -> &str {
+        use Bar::*;
+        match *self {
+            I => "│   ",
+            L => "└── ",
+            T => "├── ",
+            X => "    ",
+        }
+    }
+}
+
+struct MyFuckingPrinter {
+    bar: Vec<bool>,
+    is_last: bool,
+}
+
+impl MyFuckingPrinter {
+    fn new() -> Self {
+        MyFuckingPrinter {
+            bar: vec![],
+            is_last: false,
+        }
+    }
+
+    fn rustree(&mut self, path: MyFuckingPath) -> io::Result<()> {
+        self.print_tree_bars();
+        println!("{}", path.summary()?);
+
+        if let Folder = path.file_type {
+            self.bar.push(true);
+            let mut children: Vec<MyFuckingPath> = path.children()?.collect::<io::Result<_>>()?;
+            children.sort();
+            let num_children = children.len();
+            for (i, child) in children.drain(..).enumerate() {
+                self.is_last = i + 1 == num_children;
+                self.rustree(child)?;
+            }
+            self.bar.pop();
+        }
+
+        Ok(())
+    }
+
+    fn print_tree_bars(&mut self) {
+        let mut s = String::from("");
+        for i in 0..self.bar.len() {
+            let is_last = i == self.bar.len() - 1;
+            let barred = self.bar[i];
+            s.push_str(match (barred, is_last, self.is_last) {
+                (false, _, _) => Bar::X,
+                (true, false, _) => Bar::I,
+                (true, true, false) => Bar::T,
+                (true, true, true) => {
+                    self.bar[i] = false;
+                    Bar::L
+                }
+            }.str())
+        }
+        print!("{}", s);
+    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 enum FileType {
-    File,
     Folder,
+    File,
     SymLink,
 }
 use FileType::*;
@@ -45,7 +117,7 @@ struct MyFuckingPath {
 }
 
 impl MyFuckingPath {
-    fn new(path: PathBuf) -> io::Result<Self> {
+    pub fn new(path: PathBuf) -> io::Result<Self> {
         let metadata = path.symlink_metadata()?;
         let err_body = Error::new(ErrorKind::Other, "WTF is this?");
         let file_type = FileType::new(metadata).ok_or(err_body)?;
@@ -56,42 +128,32 @@ impl MyFuckingPath {
         })
     }
 
-    fn print(&self) -> io::Result<()> {
-        let printable_path = self.path.to_string_lossy();
-        match self.file_type {
-            File => {
-                print!("{}", printable_path);
+    fn printable_name(&self) -> Cow<str> {
+        let os_str = self.path.file_name().unwrap_or_else(|| self.path.as_os_str());
+        os_str.to_string_lossy()
+    }
+
+    pub fn summary(&self) -> io::Result<String> {
+        fn end_with_slash(s: &str) -> String {
+            if s.ends_with("/") {
+                String::from(s)
+            } else {
+                format!("{}/", s)
             }
-            Folder => {
-                print!("{}", printable_path);
-                if !printable_path.ends_with("/") {
-                    print!("/");
-                }
-            }
+        }
+
+        let printable_name = self.printable_name();
+        Ok(match self.file_type {
+            File => String::from(printable_name),
+            Folder => end_with_slash(&printable_name),
             SymLink => {
                 let target = self.path.read_link()?;
-                print!("{} -> {}", printable_path, target.to_string_lossy());
+                format!("{} -> {}", printable_name, target.to_string_lossy())
             }
-        }
-        println!("");
-        Ok(())
+        })
     }
 
-    fn rprint(&self) -> io::Result<()> {
-        self.print()?;
-
-        if let Folder = self.file_type {
-            let mut children: Vec<MyFuckingPath> = self.children()?.collect::<io::Result<_>>()?;
-            children.sort();
-            for child in children.iter() {
-                child.rprint()?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn children(&self) -> io::Result<MyFuckingChildren> {
+    pub fn children(&self) -> io::Result<MyFuckingChildren> {
         self.path.read_dir().map(MyFuckingChildren::new)
     }
 }
