@@ -1,8 +1,8 @@
+use std::borrow::Cow;
 use std::env;
 use std::fs::{self, Metadata};
 use std::io::{self, Error, ErrorKind};
 use std::path::PathBuf;
-use std::borrow::Cow;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -73,15 +73,17 @@ impl MyFuckingPrinter {
         for i in 0..self.bar.len() {
             let is_last = i == self.bar.len() - 1;
             let barred = self.bar[i];
-            s.push_str(match (barred, is_last, self.is_last) {
-                (false, _, _) => Bar::X,
-                (true, false, _) => Bar::I,
-                (true, true, false) => Bar::T,
-                (true, true, true) => {
-                    self.bar[i] = false;
-                    Bar::L
-                }
-            }.str())
+            s.push_str(
+                match (barred, is_last, self.is_last) {
+                    (false, _, _) => Bar::X,
+                    (true, false, _) => Bar::I,
+                    (true, true, false) => Bar::T,
+                    (true, true, true) => {
+                        self.bar[i] = false;
+                        Bar::L
+                    }
+                }.str(),
+            )
         }
         print!("{}", s);
     }
@@ -129,8 +131,10 @@ impl MyFuckingPath {
     }
 
     fn printable_name(&self) -> Cow<str> {
-        let os_str = self.path.file_name().unwrap_or_else(|| self.path.as_os_str());
-        os_str.to_string_lossy()
+        self.path
+            .file_name()
+            .unwrap_or_else(|| self.path.as_os_str())
+            .to_string_lossy()
     }
 
     pub fn summary(&self) -> io::Result<String> {
