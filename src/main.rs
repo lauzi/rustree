@@ -1,11 +1,11 @@
+use std::env;
 use std::fs::{self, Metadata};
 use std::io::{self, Error, ErrorKind};
-use std::env;
 use std::path::PathBuf;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    for arg in &args[1 ..] {
+    for arg in &args[1..] {
         tree(PathBuf::from(arg));
     }
 }
@@ -19,7 +19,7 @@ fn tree(root: PathBuf) {
 enum FileType {
     File,
     Folder,
-    SymLink
+    SymLink,
 }
 use FileType::*;
 
@@ -52,7 +52,7 @@ impl MyFuckingPath {
 
         Ok(MyFuckingPath {
             path: path,
-            file_type: file_type
+            file_type: file_type,
         })
     }
 
@@ -61,13 +61,13 @@ impl MyFuckingPath {
         match self.file_type {
             File => {
                 print!("{}", printable_path);
-            },
+            }
             Folder => {
                 print!("{}", printable_path);
                 if !printable_path.ends_with("/") {
                     print!("/");
                 }
-            },
+            }
             SymLink => {
                 let target = self.path.read_link()?;
                 print!("{} -> {}", printable_path, target.to_string_lossy());
@@ -97,7 +97,7 @@ impl MyFuckingPath {
 }
 
 struct MyFuckingChildren {
-    read_dir: fs::ReadDir
+    read_dir: fs::ReadDir,
 }
 
 impl MyFuckingChildren {
