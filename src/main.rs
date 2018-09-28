@@ -92,15 +92,18 @@ impl MyFuckingPath {
     }
 
     fn children(&self) -> io::Result<MyFuckingChildren> {
-        let read_dir = self.path.read_dir()?;
-        Ok(MyFuckingChildren {
-            read_dir: read_dir
-        })
+        self.path.read_dir().map(MyFuckingChildren::new)
     }
 }
 
 struct MyFuckingChildren {
     read_dir: fs::ReadDir
+}
+
+impl MyFuckingChildren {
+    fn new(read_dir: fs::ReadDir) -> Self {
+        MyFuckingChildren { read_dir }
+    }
 }
 
 impl Iterator for MyFuckingChildren {
