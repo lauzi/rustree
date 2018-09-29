@@ -1,18 +1,26 @@
 use std::borrow::Cow;
-use std::env;
 use std::fs::{self, Metadata};
 use std::io::{self, Error, ErrorKind};
 use std::iter::Peekable;
 use std::path::PathBuf;
 
+extern crate clap;
+use clap::{App, Arg};
+
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() > 1 {
-        for arg in &args[1..] {
-            tree(PathBuf::from(arg));
-        }
-    } else {
-        tree(PathBuf::from("."));
+    let matches = App::new("rustree")
+        .about("Shity tree")
+        .author("Nozh")
+        .version("0.1")
+        .arg(
+            Arg::with_name("paths")
+                .multiple(true)
+                .default_value(".")
+        ).get_matches();
+
+    let paths = matches.values_of("paths").unwrap();
+    for path in paths {
+        tree(PathBuf::from(path));
     }
 }
 
