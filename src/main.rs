@@ -7,8 +7,12 @@ use std::path::PathBuf;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    for arg in &args[1..] {
-        tree(PathBuf::from(arg));
+    if args.len() > 1 {
+        for arg in &args[1..] {
+            tree(PathBuf::from(arg));
+        }
+    } else {
+        tree(PathBuf::from("."));
     }
 }
 
