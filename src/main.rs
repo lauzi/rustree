@@ -13,11 +13,13 @@ fn main() {
         .author("Nozh")
         .version("0.1")
         .arg(Arg::with_name("show-dot-files").short("a").long("all"))
+        .arg(Arg::with_name("dirs-only").short("d").long("dir"))
         .arg(Arg::with_name("paths").multiple(true).default_value("."))
         .get_matches();
 
     let mut printer = MyFuckingPrinter::new();
     printer.show_dot_files = matches.is_present("show-dot-files");
+    printer.dirs_only = matches.is_present("dirs-only");
 
     let paths = matches.values_of("paths").unwrap();
     for path in paths {
@@ -50,6 +52,7 @@ struct MyFuckingPrinter {
     bar: Vec<bool>,
     is_last: bool,
     show_dot_files: bool,
+    dirs_only: bool,
 }
 
 impl MyFuckingPrinter {
@@ -58,15 +61,27 @@ impl MyFuckingPrinter {
             bar: vec![],
             is_last: false,
             show_dot_files: false,
+            dirs_only: false,
         }
     }
 
+    fn p(&self, path: &MyFuckingPath) -> bool {
+        if !self.show_dot_files && path.is_dot_file() {
+            return false;
+        }
+
+        if self.dirs_only && path.file_type != Folder {
+            return false;
+        }
+
+        true
+    }
+
     fn get_children(&self, path: MyFuckingPath) -> io::Result<Vec<MyFuckingPath>> {
-        let filter_children =
-            |path: &MyFuckingPath| -> bool { self.show_dot_files || !path.is_dot_file() };
+        let p = |path: &MyFuckingPath| self.p(path);
         let mut children: Vec<MyFuckingPath> = path
             .children()?
-            .filter(|r_path| r_path.as_ref().map(filter_children).unwrap_or(true))
+            .filter(|r_path| r_path.as_ref().map(p).unwrap_or(true))
             .collect::<io::Result<_>>()?;
         children.sort();
         Ok(children)
