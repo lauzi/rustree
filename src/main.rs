@@ -96,7 +96,9 @@ impl MyFuckingPrinter {
     }
 
     fn path_color(&self, path: &MyFuckingPath) -> &str {
-        if let Folder = path.file_type {
+        if !self.colored {
+            "white"
+        } else if let Folder = path.file_type {
             "blue"
         } else if let SymLink = path.file_type {
             "magenta" // purple
@@ -110,15 +112,56 @@ impl MyFuckingPrinter {
     fn print_path(&mut self, path: &MyFuckingPath) -> io::Result<()> {
         self.print_tree_bars();
 
-        let summary = path.summary()?;
-        if self.colored {
-            let color_str = self.path_color(&path);
-            println!("{}", summary.color(color_str));
-        } else {
-            println!("{}", summary);
+        fn end_with_slash(s: &str) -> String {
+            if s.ends_with("/") {
+                String::from(s)
+            } else {
+                format!("{}/", s)
+            }
         }
 
-        Ok(())
+        let mut cur_path = Cow::Borrowed(path);
+        // TODO: refactor this ball of shit
+        // TODO: add switch to turn off symlink following
+        loop {
+            {
+                // Block to end name's life
+                let name = cur_path.printable_name();
+                let color = self.path_color(&cur_path);
+                match cur_path.file_type {
+                    File => {
+                        println!("{}", name.color(color));
+                        return Ok(());
+                    }
+                    Folder => {
+                        println!("{}", end_with_slash(&name).color(color));
+                        return Ok(());
+                    }
+                    SymLink => {
+                        print!("{} -> ", name.color(color));
+                    }
+                }
+            }
+
+            // Fallthrough: SymLink
+            let link_content = cur_path.path.read_link()?;
+            let mut target = PathBuf::from(&cur_path.path);
+            target.pop(); // pop the SymLink name
+            target.push(&link_content);
+            match MyFuckingPath::new(target) {
+                Ok(new_path) => {
+                    // TODO: cycle detection
+                    cur_path = Cow::Owned(new_path);
+                }
+                Err(ref err) if err.kind() == ErrorKind::NotFound => {
+                    println!("{}", link_content.to_string_lossy());
+                    return Ok(());
+                }
+                Err(err) => {
+                    return Err(err);
+                }
+            }
+        }
     }
 
     fn rustree(&mut self, path: MyFuckingPath) -> io::Result<()> {
@@ -158,7 +201,7 @@ impl MyFuckingPrinter {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 enum FileType {
     Folder,
     File,
@@ -181,6 +224,7 @@ impl FileType {
     }
 }
 
+#[derive(Clone)]
 struct MyFuckingPath {
     file_type: FileType,
     path: PathBuf,
@@ -200,14 +244,14 @@ impl MyFuckingPath {
         })
     }
 
-    fn is_dot_file(&self) -> bool {
+    pub fn is_dot_file(&self) -> bool {
         self.path
             .file_name()
             .map(|name| name.to_string_lossy().starts_with("."))
             .unwrap_or(false)
     }
 
-    fn is_exec(&self) -> bool {
+    pub fn is_exec(&self) -> bool {
         const EXEC_BITS: u32 = 0o111;
 
         let mode = self.metadata.permissions().mode();
@@ -219,26 +263,6 @@ impl MyFuckingPath {
             .file_name()
             .unwrap_or_else(|| self.path.as_os_str())
             .to_string_lossy()
-    }
-
-    pub fn summary(&self) -> io::Result<String> {
-        fn end_with_slash(s: &str) -> String {
-            if s.ends_with("/") {
-                String::from(s)
-            } else {
-                format!("{}/", s)
-            }
-        }
-
-        let printable_name = self.printable_name();
-        Ok(match self.file_type {
-            File => String::from(printable_name),
-            Folder => end_with_slash(&printable_name),
-            SymLink => {
-                let target = self.path.read_link()?;
-                format!("{} -> {}", printable_name, target.to_string_lossy())
-            }
-        })
     }
 
     pub fn children(&self) -> io::Result<MyFuckingChildren> {
