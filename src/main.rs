@@ -12,21 +12,18 @@ fn main() {
         .about("Shity tree")
         .author("Nozh")
         .version("0.1")
-        .arg(
-            Arg::with_name("paths")
-                .multiple(true)
-                .default_value(".")
-        ).get_matches();
+        .arg(Arg::with_name("show-dot-files").short("a").long("all"))
+        .arg(Arg::with_name("paths").multiple(true).default_value("."))
+        .get_matches();
+
+    let mut printer = MyFuckingPrinter::new();
+    printer.show_dot_files = matches.is_present("show-dot-files");
 
     let paths = matches.values_of("paths").unwrap();
     for path in paths {
-        tree(PathBuf::from(path));
+        let pathy = MyFuckingPath::new(PathBuf::from(path)).unwrap();
+        printer.rustree(pathy).unwrap();
     }
-}
-
-pub fn tree(root: PathBuf) {
-    let pathy = MyFuckingPath::new(root).unwrap();
-    MyFuckingPrinter::new().rustree(pathy).unwrap();
 }
 
 #[derive(Clone)]
