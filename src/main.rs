@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::env;
 use std::fs::{self, Metadata};
 use std::io::{self, Error, ErrorKind};
+use std::iter::Peekable;
 use std::path::PathBuf;
 
 fn main() {
@@ -52,9 +53,8 @@ impl MyFuckingPrinter {
     }
 
     fn get_children(&self, path: MyFuckingPath) -> io::Result<Vec<MyFuckingPath>> {
-        let filter_children = |path: &MyFuckingPath| -> bool {
-            self.show_dot_files || !path.is_dot_file()
-        };
+        let filter_children =
+            |path: &MyFuckingPath| -> bool { self.show_dot_files || !path.is_dot_file() };
         let mut children: Vec<MyFuckingPath> = path
             .children()?
             .filter(|r_path| r_path.as_ref().map(filter_children).unwrap_or(true))
@@ -70,9 +70,9 @@ impl MyFuckingPrinter {
         if let Folder = path.file_type {
             self.bar.push(true);
             let mut children = self.get_children(path)?;
-            let num_children = children.len();
-            for (i, child) in children.drain(..).enumerate() {
-                self.is_last = i + 1 == num_children;
+            let mut is_last_iter: IsLastIterator<_> = children.drain(..).into();
+            for (child, is_last) in is_last_iter {
+                self.is_last = is_last;
                 self.rustree(child)?;
             }
             self.bar.pop();
@@ -83,16 +83,15 @@ impl MyFuckingPrinter {
 
     fn print_tree_bars(&mut self) {
         let mut s = String::from("");
-        for i in 0..self.bar.len() {
-            let is_last = i == self.bar.len() - 1;
-            let barred = self.bar[i];
+        let is_last_iter: IsLastIterator<_> = self.bar.iter_mut().into();
+        for (bar, is_last) in is_last_iter {
             s.push_str(
-                match (barred, is_last, self.is_last) {
+                match (*bar, is_last, self.is_last) {
                     (false, _, _) => Bar::X,
                     (true, false, _) => Bar::I,
                     (true, true, false) => Bar::T,
                     (true, true, true) => {
-                        self.bar[i] = false;
+                        *bar = false;
                         Bar::L
                     }
                 }.str(),
@@ -198,6 +197,32 @@ impl Iterator for MyFuckingChildren {
         self.read_dir.next().map(|result_dir_entry| {
             let dir_entry = result_dir_entry?;
             MyFuckingPath::new(dir_entry.path())
+        })
+    }
+}
+
+struct IsLastIterator<T: Iterator> {
+    it: Peekable<T>,
+}
+
+impl<T: Iterator> IsLastIterator<T> {
+    fn new(it: T) -> Self {
+        IsLastIterator { it: it.peekable() }
+    }
+}
+
+impl<T: Iterator> From<T> for IsLastIterator<T> {
+    fn from(it: T) -> IsLastIterator<T> {
+        IsLastIterator::new(it)
+    }
+}
+
+impl<T: Iterator> Iterator for IsLastIterator<T> {
+    type Item = (T::Item, bool);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.it.next().map(|item| {
+            let is_last = self.it.peek().is_none();
+            (item, is_last)
         })
     }
 }
