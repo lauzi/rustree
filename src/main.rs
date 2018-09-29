@@ -2,10 +2,14 @@ use std::borrow::Cow;
 use std::fs::{self, Metadata};
 use std::io::{self, Error, ErrorKind};
 use std::iter::Peekable;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 extern crate clap;
 use clap::{App, Arg};
+
+extern crate colored;
+use colored::*;
 
 fn main() {
     let matches = App::new("rustree")
@@ -14,12 +18,14 @@ fn main() {
         .version("0.1")
         .arg(Arg::with_name("show-dot-files").short("a").long("all"))
         .arg(Arg::with_name("dirs-only").short("d").long("dir"))
+        .arg(Arg::with_name("no-color").long("no-color"))
         .arg(Arg::with_name("paths").multiple(true).default_value("."))
         .get_matches();
 
     let mut printer = MyFuckingPrinter::new();
     printer.show_dot_files = matches.is_present("show-dot-files");
     printer.dirs_only = matches.is_present("dirs-only");
+    printer.colored = !matches.is_present("no-color");
 
     let paths = matches.values_of("paths").unwrap();
     for path in paths {
@@ -53,6 +59,7 @@ struct MyFuckingPrinter {
     is_last: bool,
     show_dot_files: bool,
     dirs_only: bool,
+    colored: bool,
 }
 
 impl MyFuckingPrinter {
@@ -62,6 +69,7 @@ impl MyFuckingPrinter {
             is_last: false,
             show_dot_files: false,
             dirs_only: false,
+            colored: true,
         }
     }
 
@@ -83,13 +91,38 @@ impl MyFuckingPrinter {
             .children()?
             .filter(|r_path| r_path.as_ref().map(p).unwrap_or(true))
             .collect::<io::Result<_>>()?;
-        children.sort();
+        children.sort_by(|ref a, ref b| a.path.cmp(&b.path));
         Ok(children)
     }
 
-    fn rustree(&mut self, path: MyFuckingPath) -> io::Result<()> {
+    fn path_color(&self, path: &MyFuckingPath) -> &str {
+        if let Folder = path.file_type {
+            "blue"
+        } else if let SymLink = path.file_type {
+            "magenta" // purple
+        } else if path.is_exec() {
+            "red"
+        } else {
+            "white"
+        }
+    }
+
+    fn print_path(&mut self, path: &MyFuckingPath) -> io::Result<()> {
         self.print_tree_bars();
-        println!("{}", path.summary()?);
+
+        let summary = path.summary()?;
+        if self.colored {
+            let color_str = self.path_color(&path);
+            println!("{}", summary.color(color_str));
+        } else {
+            println!("{}", summary);
+        }
+
+        Ok(())
+    }
+
+    fn rustree(&mut self, path: MyFuckingPath) -> io::Result<()> {
+        self.print_path(&path)?;
 
         if let Folder = path.file_type {
             self.bar.push(true);
@@ -134,7 +167,7 @@ enum FileType {
 use FileType::*;
 
 impl FileType {
-    fn new(metadata: Metadata) -> Option<Self> {
+    fn new(metadata: &Metadata) -> Option<Self> {
         let file_type = metadata.file_type();
         if file_type.is_dir() {
             Some(Folder)
@@ -148,21 +181,22 @@ impl FileType {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct MyFuckingPath {
     file_type: FileType,
     path: PathBuf,
+    metadata: Metadata,
 }
 
 impl MyFuckingPath {
     pub fn new(path: PathBuf) -> io::Result<Self> {
         let metadata = path.symlink_metadata()?;
         let err_body = Error::new(ErrorKind::Other, "WTF is this?");
-        let file_type = FileType::new(metadata).ok_or(err_body)?;
+        let file_type = FileType::new(&metadata).ok_or(err_body)?;
 
         Ok(MyFuckingPath {
             path: path,
             file_type: file_type,
+            metadata: metadata,
         })
     }
 
@@ -171,6 +205,13 @@ impl MyFuckingPath {
             .file_name()
             .map(|name| name.to_string_lossy().starts_with("."))
             .unwrap_or(false)
+    }
+
+    fn is_exec(&self) -> bool {
+        const EXEC_BITS: u32 = 0o111;
+
+        let mode = self.metadata.permissions().mode();
+        mode & EXEC_BITS != 0
     }
 
     fn printable_name(&self) -> Cow<str> {

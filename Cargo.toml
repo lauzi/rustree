@@ -5,3 +5,4 @@ authors = ["LauZi <st61112@gmail.com>"]
 
 [dependencies]
 clap = "~2.32"
+colored = "1.6"
