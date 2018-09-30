@@ -146,7 +146,7 @@ impl MyFuckingPrinter {
                         let new_entry = printed_paths.insert(cur_path.path.clone());
                         print!("{}", name.color(color));
                         if !new_entry {
-                            println!(" [loop]");
+                            println!(" -> [loop]");
                             return Ok(());
                         } else if self.follow_sym_links {
                             print!(" -> ");
