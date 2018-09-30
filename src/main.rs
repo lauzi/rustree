@@ -19,6 +19,7 @@ fn main() {
         .arg(Arg::with_name("show-dot-files").short("a").long("all"))
         .arg(Arg::with_name("dirs-only").short("d").long("dir"))
         .arg(Arg::with_name("no-color").long("no-color"))
+        .arg(Arg::with_name("no-follow").long("no-follow"))
         .arg(Arg::with_name("paths").multiple(true).default_value("."))
         .get_matches();
 
@@ -26,6 +27,7 @@ fn main() {
     printer.show_dot_files = matches.is_present("show-dot-files");
     printer.dirs_only = matches.is_present("dirs-only");
     printer.colored = !matches.is_present("no-color");
+    printer.follow_sym_links = !matches.is_present("no-follow");
 
     let paths = matches.values_of("paths").unwrap();
     for path in paths {
@@ -60,6 +62,7 @@ struct MyFuckingPrinter {
     show_dot_files: bool,
     dirs_only: bool,
     colored: bool,
+    follow_sym_links: bool,
 }
 
 impl MyFuckingPrinter {
@@ -70,6 +73,7 @@ impl MyFuckingPrinter {
             show_dot_files: false,
             dirs_only: false,
             colored: true,
+            follow_sym_links: true,
         }
     }
 
@@ -138,7 +142,13 @@ impl MyFuckingPrinter {
                         return Ok(());
                     }
                     SymLink => {
-                        print!("{} -> ", name.color(color));
+                        print!("{}", name.color(color));
+                        if self.follow_sym_links {
+                            print!(" -> ");
+                        } else {
+                            println!("");
+                            return Ok(());
+                        }
                     }
                 }
             }
