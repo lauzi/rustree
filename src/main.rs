@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::fs::{self, Metadata};
 use std::io::{self, Error, ErrorKind};
 use std::iter::Peekable;
@@ -125,8 +126,8 @@ impl MyFuckingPrinter {
         }
 
         let mut cur_path = Cow::Borrowed(path);
+        let mut printed_paths = HashSet::new();
         // TODO: refactor this ball of shit
-        // TODO: add switch to turn off symlink following
         loop {
             {
                 // Block to end name's life
@@ -142,8 +143,12 @@ impl MyFuckingPrinter {
                         return Ok(());
                     }
                     SymLink => {
+                        let new_entry = printed_paths.insert(cur_path.path.clone());
                         print!("{}", name.color(color));
-                        if self.follow_sym_links {
+                        if !new_entry {
+                            println!(" [loop]");
+                            return Ok(());
+                        } else if self.follow_sym_links {
                             print!(" -> ");
                         } else {
                             println!("");
@@ -154,16 +159,13 @@ impl MyFuckingPrinter {
             }
 
             // Fallthrough: SymLink
-            let link_content = cur_path.path.read_link()?;
-            let mut target = PathBuf::from(&cur_path.path);
-            target.pop(); // pop the SymLink name
-            target.push(&link_content);
-            match MyFuckingPath::new(target) {
+            match cur_path.open_link() {
                 Ok(new_path) => {
                     // TODO: cycle detection
                     cur_path = Cow::Owned(new_path);
                 }
                 Err(ref err) if err.kind() == ErrorKind::NotFound => {
+                    let link_content = cur_path.path.read_link()?;
                     println!("{}", link_content.to_string_lossy());
                     return Ok(());
                 }
@@ -266,6 +268,14 @@ impl MyFuckingPath {
 
         let mode = self.metadata.permissions().mode();
         mode & EXEC_BITS != 0
+    }
+
+    pub fn open_link(&self) -> io::Result<Self> {
+        let link_content = self.path.read_link()?;
+        let mut target = PathBuf::from(&self.path);
+        target.pop(); // pop the SymLink name
+        target.push(&link_content);
+        MyFuckingPath::new(target)
     }
 
     fn printable_name(&self) -> Cow<str> {
